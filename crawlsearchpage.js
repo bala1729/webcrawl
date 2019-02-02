@@ -74,7 +74,6 @@ Promise.all(pagePromises).then(responses => {
     }
   });
 
-  console.log("products ", products);
   // Filtering result - rules
   // 1. asin undefined
   // 2. eligibleForShipping false
@@ -91,10 +90,9 @@ Promise.all(pagePromises).then(responses => {
   // to scrape more product information
 
   // filteredProducts.forEach(product => {
-  //     const productInfo = crawlProduct.getProductInfo(crawler, domain, product.asin);
-  //     // crawlProduct.getProductInfo(crawler, domain, product.asin).then(function(response){
-  //     //     console.log(response);
-  //     // });
+  //     crawlProduct.getProductInfo(crawler, domain, product.asin).then(function(productInfo) {
+  //
+  //     });
   //
   // });
 
@@ -103,8 +101,6 @@ Promise.all(pagePromises).then(responses => {
   } else {
       console.log("No products found after applying filter rules");
   }
-
-
 
 });
 
