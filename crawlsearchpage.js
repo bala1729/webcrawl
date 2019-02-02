@@ -6,20 +6,24 @@ const cheerio = require("cheerio");
 const json2csv = require('json2csv').parse;
 const R = require("ramda");
 const crawlProduct = require("./crawlproduct.js");
+const config = require("./config/config.json");
 
-const crawler = new ProxyCrawlAPI({ token: "NBdjlVibaCsnHoXhScdBaQ" });
+const environment = process.env.NODE_ENV || "development";
+const environmentConfig = config[environment];
 
-const domain = "https://www.amazon.com"
+const crawler = new ProxyCrawlAPI({ token: environmentConfig.proxyCrawlApiToken });
+
+const domain = environmentConfig.amazonDomain;
 
 
-let searchKeyword = "hp+laptops";
+const searchKeyword = process.argv[2];
 
 let pageRefUrl = "/s/ref=nb_sb_noss_1?url=search-alias%3Daps&field-keywords=" + searchKeyword;
 
 const baseFileName = "crawl_output.csv";
-const basePath="crawloutput";
+const basePath=process.argv[3];
 
-const numberOfPages = 4;
+const numberOfPages = environmentConfig.numberOfPagesToCrawl;
 let currentPageNumber = 0;
 
 let products = [];
@@ -37,7 +41,6 @@ while (currentPageNumber < numberOfPages) {
 
 Promise.all(pagePromises).then(responses => {
   responses.forEach(function(response){
-      console.log("response ", response);
       if (response.statusCode === 200) {
         const $ = cheerio.load(response.body);
         let pageNumber = $(".pagnCur").text();
@@ -53,7 +56,7 @@ Promise.all(pagePromises).then(responses => {
           //product.title = $(itemDetails).children(".a-row .a-spacing-small").eq(0).children().eq(0).children().eq(0).text();
           product.title = $(itemTop).eq(0).children().eq(0).children().eq(0).text();
           let eligibleForShipping = $(itemCentre).children().eq(0).text();
-          if (!R.isNil(eligibleForShipping) && eligibleForShipping.startsWith("Eligible for Shipping to Canada")) {
+          if (!R.isNil(eligibleForShipping) && eligibleForShipping.startsWith("Eligible for Shipping to")) {
             product.eligibleForShipping = true;
           } else {
             product.eligibleForShipping = false;
@@ -71,7 +74,7 @@ Promise.all(pagePromises).then(responses => {
     }
   });
 
-
+  console.log("products ", products);
   // Filtering result - rules
   // 1. asin undefined
   // 2. eligibleForShipping false
@@ -87,14 +90,13 @@ Promise.all(pagePromises).then(responses => {
   // Now loop thru the filtered products and access each product page
   // to scrape more product information
 
-  filteredProducts.forEach(product => {
-      const productInfo = crawlProduct.getProductInfo(crawler, domain, product.asin);
-      console.log(productInfo);
-      // crawlProduct.getProductInfo(crawler, domain, product.asin).then(function(response){
-      //     console.log(response);
-      // });
-
-  });
+  // filteredProducts.forEach(product => {
+  //     const productInfo = crawlProduct.getProductInfo(crawler, domain, product.asin);
+  //     // crawlProduct.getProductInfo(crawler, domain, product.asin).then(function(response){
+  //     //     console.log(response);
+  //     // });
+  //
+  // });
 
   if (!R.isEmpty(filteredProducts)) {
       writeToFile(filteredProducts, Object.keys(R.head(filteredProducts)));
