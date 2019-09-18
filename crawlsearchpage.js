@@ -35,7 +35,7 @@ while (currentPageNumber < numberOfPages) {
     pagePromises.push(Promise.resolve(crawler.get(url, {
       userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_4) AppleWebKit/600.7.12 (KHTML, like Gecko) Version/8.0.7 Safari/600.7.12',
       format: 'html',
-      //country: 'CA'
+      country: 'CA'
   })));
 }
 
@@ -47,41 +47,36 @@ Promise.all(pagePromises).then(responses => {
         $(".s-result-item").each(function(i,element) {
           let product = {};
           let item = $(this);
-          product.asin = item.attr("data-asin");
-          let itemDetails = item.children(".s-item-container").children(".a-fixed-left-grid").children(".a-fixed-left-grid-inner")
-          .children(".a-fixed-left-grid .a-col-right");
-          let itemTop = $(itemDetails).children().eq(0);
-          let itemCentre = $(itemDetails).children().eq(1);
-          let itemDetailsBottom = $(itemDetails).children().eq(2);
-          //product.title = $(itemDetails).children(".a-row .a-spacing-small").eq(0).children().eq(0).children().eq(0).text();
-          product.title = $(itemTop).eq(0).children().eq(0).children().eq(0).text();
-          let eligibleForShipping = $(itemCentre).children().eq(0).text();
-          if (!R.isNil(eligibleForShipping) && eligibleForShipping.startsWith("Eligible for Shipping to")) {
-            product.eligibleForShipping = true;
-          } else {
-            product.eligibleForShipping = false;
-          }
-          let itemDetailsLeft = $(itemDetailsBottom).children().eq(0);
-          let itemDetailsRight = $(itemDetailsBottom).children().eq(1);
-          product.price = $(itemDetailsLeft).eq(0).children().eq(0).children().eq(0).children().eq(0).text();
 
+          product.asin = item.attr("data-asin");
+          product.title = item.find("span.a-size-medium.a-color-base.a-text-normal").eq(0).text().trim();
+
+          const currency = item.find("span.a-price-symbol").eq(0).text().trim();
+          const priceWhole = item.find("span.a-price-whole").eq(0).text().trim();
+          const priceFraction = item.find("span.a-price-fraction").eq(0).text().trim();
+          const totalPrice = priceWhole + priceFraction;
+
+          product.price = totalPrice;
+          product.currency = currency;
+
+          product.stockInfo = item.find("span.a-color-price").eq(0).text().trim();
           products.push(product);
 
         });
 
     } else {
-        console.error("Crawler error ", response.pcStatus);
+        console.error("Crawler error ", response.pcStatus + ": " + response.body);
     }
   });
-
+//console.log("products ", products);
   // Filtering result - rules
   // 1. asin undefined
   // 2. eligibleForShipping false
   let filteredProducts = R.filter(product => !R.isNil(product.asin)
   && !R.isNil(product.price)
-  && product.price.startsWith("$")
-  && product.eligibleForShipping
+  && (product.currency === "$")
   ,products);
+
 
   console.log("total products found : ", products.length);
   console.log("filtered products : ", filteredProducts.length);
@@ -89,20 +84,36 @@ Promise.all(pagePromises).then(responses => {
   // Now loop thru the filtered products and access each product page
   // to scrape more product information
 
-  // filteredProducts.forEach(product => {
-  //     crawlProduct.getProductInfo(crawler, domain, product.asin).then(function(productInfo) {
-  //
-  //     });
-  //
-  // });
+  fetchProductPageInfoForAllProducts(crawler, domain, filteredProducts).then(function(finalProducts) {
+      console.log("Shippable products ", finalProducts.length)
+      if (!R.isEmpty(finalProducts)) {
+          writeToFile(finalProducts, Object.keys(R.head(finalProducts)));
+      } else {
+          console.error("No products found after applying filter rules");
+      }
+  })
 
-  if (!R.isEmpty(filteredProducts)) {
-      writeToFile(filteredProducts, Object.keys(R.head(filteredProducts)));
-  } else {
-      console.log("No products found after applying filter rules");
-  }
 
+
+})
+.catch(function(error){
+    console.error("Error occured in crawler. Error: ", error);
 });
+
+async function fetchProductPageInfoForAllProducts(crawler, domain, products) {
+    let augmentedProducts = [];
+
+    for (let i=0; i<products.length; i++) {
+        const productInfo = await crawlProduct.getProductInfo(crawler, domain, products[i].asin);
+        products[i].primeEligible = productInfo.primeEligible;
+        if (productInfo.primeEligible === 'Fulfilled by Amazon') {
+            augmentedProducts.push(products[i]);
+        }
+    }
+
+    return Promise.resolve(augmentedProducts);
+
+}
 
 function writeToFile(products, fields) {
 

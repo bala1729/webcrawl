@@ -1,9 +1,9 @@
 {
     "development": {
-        "proxyCrawlApiToken": "NBdjlVibaCsnHoXhScdBaQ",
+        "proxyCrawlApiToken": "<Paste ProxyCrawl API Token here>",
         "amazonDomain": "https://www.amazon.com",
         "crawlOutputFileName": "crawl_output.csv",
-        "numberOfPagesToCrawl": 4
+        "numberOfPagesToCrawl": 1
     },
     "production": {
         "proxyCrawlApiToken": "<Paste ProxyCrawl API Token here>",
