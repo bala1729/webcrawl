@@ -3,13 +3,15 @@
         "proxyCrawlApiToken": "<Paste ProxyCrawl API Token here>",
         "amazonDomain": "https://www.amazon.com",
         "crawlOutputFileName": "crawl_output.csv",
-        "numberOfPagesToCrawl": 1
+        "numberOfPagesToCrawl": 1,
+        "dbConnectString": "postgresql://<user>:<pwd>@localhost:5432/inventorydb"
     },
     "production": {
         "proxyCrawlApiToken": "<Paste ProxyCrawl API Token here>",
         "amazonDomain": "https://www.amazon.com",
         "crawlOutputFileName": "crawl_output.csv",
-        "numberOfPagesToCrawl": 4
+        "numberOfPagesToCrawl": 4,
+        "dbConnectString": "postgresql://<user>:<pwd>@localhost:5432/inventorydb"
     }
 
 }

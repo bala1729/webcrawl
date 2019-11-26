@@ -23,7 +23,7 @@ const getProductInfo = async function (crawler, domain, productAsin) {
           console.error("Product page crawl error for "+productAsin);
         }
     } catch(err) {
-        console.error("Error occured crawling Product page. Error: ", err);
+        console.error("Error occured crawling Product page. " + productAsin + " Error: ", err);
     }
     await sleep(3000); // sleep for 3s to make this be like a realistic human browsing
     return Promise.resolve(productInfo);

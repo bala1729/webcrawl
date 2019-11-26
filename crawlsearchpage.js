@@ -6,14 +6,14 @@ const cheerio = require("cheerio");
 const json2csv = require('json2csv').parse;
 const R = require("ramda");
 const crawlProduct = require("./crawlproduct.js");
-const config = require("./config/config.json");
+const config = require("./config/config").config();
+const inventorydb = require("./data_access/inventory");
 
-const environment = process.env.NODE_ENV || "development";
-const environmentConfig = config[environment];
+const hrstart = process.hrtime();
 
-const crawler = new ProxyCrawlAPI({ token: environmentConfig.proxyCrawlApiToken });
+const crawler = new ProxyCrawlAPI({ token: config.proxyCrawlApiToken });
 
-const domain = environmentConfig.amazonDomain;
+const domain = config.amazonDomain;
 
 
 const searchKeyword = process.argv[2];
@@ -23,7 +23,7 @@ let pageRefUrl = "/s/ref=nb_sb_noss_1?url=search-alias%3Daps&field-keywords=" + 
 const baseFileName = "crawl_output.csv";
 const basePath=process.argv[3];
 
-const numberOfPages = environmentConfig.numberOfPagesToCrawl;
+const numberOfPages = config.numberOfPagesToCrawl;
 let currentPageNumber = 0;
 
 let products = [];
@@ -48,7 +48,8 @@ Promise.all(pagePromises).then(responses => {
           let product = {};
           let item = $(this);
 
-          product.asin = item.attr("data-asin");
+          product.external_product_id = item.attr("data-asin");
+          product.external_product_id_type = "ASIN";
           product.title = item.find("span.a-size-medium.a-color-base.a-text-normal").eq(0).text().trim();
 
           const currency = item.find("span.a-price-symbol").eq(0).text().trim();
@@ -56,10 +57,17 @@ Promise.all(pagePromises).then(responses => {
           const priceFraction = item.find("span.a-price-fraction").eq(0).text().trim();
           const totalPrice = priceWhole + priceFraction;
 
-          product.price = totalPrice;
-          product.currency = currency;
+          product.standard_price = totalPrice;
+          if (currency === "$" && domain.endsWith("amazon.com")) {
+            product.currency = "USD";
+          } else {
+            product.currency = currency;
+          }
 
-          product.stockInfo = item.find("span.a-color-price").eq(0).text().trim();
+          product.stock_info = item.find("span.a-color-price").eq(0).text().trim();
+
+          product.quantity = 55;
+
           products.push(product);
 
         });
@@ -72,9 +80,10 @@ Promise.all(pagePromises).then(responses => {
   // Filtering result - rules
   // 1. asin undefined
   // 2. eligibleForShipping false
-  let filteredProducts = R.filter(product => !R.isNil(product.asin)
-  && !R.isNil(product.price)
-  && (product.currency === "$")
+ 
+  let filteredProducts = R.filter(product => !R.isNil(product.external_product_id)
+  && !R.isNil(product.standard_price)
+  && (product.currency === "USD")
   ,products);
 
 
@@ -84,14 +93,18 @@ Promise.all(pagePromises).then(responses => {
   // Now loop thru the filtered products and access each product page
   // to scrape more product information
 
-  fetchProductPageInfoForAllProducts(crawler, domain, filteredProducts).then(function(finalProducts) {
+  fetchProductPageInfoForAllProducts(crawler, domain, filteredProducts).then(async function(finalProducts) {
       console.log("Shippable products ", finalProducts.length)
       if (!R.isEmpty(finalProducts)) {
           writeToFile(finalProducts, Object.keys(R.head(finalProducts)));
+          await updateDatabase(finalProducts);
+          console.log("Updating database complete");
+          const hrend = process.hrtime(hrstart);
+          console.info('Execution time: %ds %dms', hrend[0], hrend[1] / 1000000);
       } else {
           console.error("No products found after applying filter rules");
       }
-  })
+  });
 
 
 
@@ -100,11 +113,13 @@ Promise.all(pagePromises).then(responses => {
     console.error("Error occured in crawler. Error: ", error);
 });
 
+
+
 async function fetchProductPageInfoForAllProducts(crawler, domain, products) {
     let augmentedProducts = [];
 
     for (let i=0; i<products.length; i++) {
-        const productInfo = await crawlProduct.getProductInfo(crawler, domain, products[i].asin);
+        const productInfo = await crawlProduct.getProductInfo(crawler, domain, products[i].external_product_id);
         products[i].primeEligible = productInfo.primeEligible;
         if (productInfo.primeEligible === 'Fulfilled by Amazon') {
             augmentedProducts.push(products[i]);
@@ -133,4 +148,10 @@ function writeToFile(products, fields) {
     } catch (err) {
       console.error("csv parsing error ", err);
     }
+}
+
+async function updateDatabase(products) {
+  products.forEach(async(product) =>  {
+    await inventorydb.upsertProduct(product);
+  });
 }
